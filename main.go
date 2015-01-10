@@ -39,6 +39,9 @@ func init() {
 	flag.IntVar(&RoomFillRate, "room_fill_rate", 20, "Minimum percent space given to rooms (default 20)")
 	flag.BoolVar(&Animate, "animate", false, "Set to watch animation in terminal")
 
+	Width = roundUpToEven(Width) - 1
+	Height = roundUpToEven(Height) - 1
+
 	rand.Seed(time.Now().Unix())
 }
 
@@ -185,7 +188,7 @@ func (s *Stage) FillMaze() {
 	// get init cell
 	var x, y int
 	for x == 0 && y == 0 {
-		x1, y1 := rand.Intn(s.width)+1, rand.Intn(s.height)+1
+		x1, y1 := roundUpToEven(rand.Intn(s.width)), roundUpToEven(rand.Intn(s.height))
 		// start on a border
 		if rand.Intn(1) == 1 {
 			x = 0
@@ -193,9 +196,10 @@ func (s *Stage) FillMaze() {
 			y = 0
 		}
 		// cells start filled as walls. empty cells are carved out already
-		if s.cell[x1][y1].empty {
+		if !s.cellExists(x1, y1) || s.cell[x1][y1].empty {
 			continue
 		}
+
 		x, y = x1, y1
 	}
 
@@ -216,10 +220,10 @@ func (s *Stage) FillMaze() {
 		i = rand.Intn(len(tiles))
 
 		// find the next cell to carve out
-		nextX, nextY, middleX, middleY := s.innerLoop(tiles, i)
+		nextX, nextY, middleX, middleY := s.getNextMove(tiles, i)
 		if nextX == 0 || nextY == 0 || middleX == 0 || middleY == 0 {
+			// no new move found, remove this tile from the list
 			tiles = append(tiles[:i], tiles[i+1:]...)
-
 			continue
 		}
 		//fmt.Println(tiles)
@@ -241,27 +245,19 @@ func (s *Stage) FillMaze() {
 		}
 
 		tiles = append(tiles, s.cell[nextX][nextY])
-		// if we get here, there were no available filled cells to carve out
-		// cut out this element
-		if i+1 > len(tiles) {
-			log.Println("outer - i out of bounds")
-			continue
-		}
-
 	}
-
 }
 
-// innerLoop finds the next cell's x and y. Because we have to clear out
+// getNextMove finds the next cell's x and y. Because we have to clear out
 // two cells, it returns two sets of x,y (the destination cell, and the
 // cell in between)
 //
 //   Ex: we start at cell N, target cell M, and will need to clear O
-//       In this way, we eat through the maze. nom nom nom
-//   ####     ####    ####
-//   #N##  => #N#M => #NOM
-//   ####     ####    ####
-func (s *Stage) innerLoop(tiles []Tile, i int) (int, int, int, int) {
+//   ####    ####    ####
+//   #N## => #N#M => #NOM
+//   ####    ####    ####
+//   In this way, we eat through the maze. nom nom nom
+func (s *Stage) getNextMove(tiles []Tile, i int) (int, int, int, int) {
 	// pick random order (1 up, 2 right, 3 down, 4 left)
 	directions := getRandomIntList(1, 5)
 	nextX, nextY, middleX, middleY := 0, 0, 0, 0
@@ -284,6 +280,10 @@ func (s *Stage) innerLoop(tiles []Tile, i int) (int, int, int, int) {
 		nextX = tiles[i].x + curXAdj
 		nextY = tiles[i].y + curYAdj
 
+		if s.isEdge(nextX, nextY) {
+			continue
+		}
+
 		if (nextX > s.width || nextX <= 0) || (nextY > s.height || nextY <= 0) {
 			continue
 		}
@@ -303,6 +303,13 @@ func (s *Stage) innerLoop(tiles []Tile, i int) (int, int, int, int) {
 	return nextX, nextY, middleX, middleY
 }
 
+func (s *Stage) isEdge(x, y int) bool {
+	if x == 1 || x == s.width || y == 1 || y == s.height {
+		return true
+	}
+	return false
+}
+
 // getRandomIntList returns [start, end) random sorted list of ints
 func getRandomIntList(start, end int) []int {
 	r := make([]int, end-start)
@@ -318,6 +325,13 @@ func getRandomIntList(start, end int) []int {
 	return r
 }
 
+func roundUpToEven(n int) int {
+	if n%2 == 0 {
+		return n
+	}
+	return n + 1
+}
+
 func (s *Stage) AddRooms() {
 	roomVolumeLeft := s.width * s.height * RoomFillRate / 100
 	if roomVolumeLeft == 0 {
@@ -327,10 +341,10 @@ func (s *Stage) AddRooms() {
 	// pick some big max just to avoid infinate looping
 	for maxIterations := 10000; maxIterations >= 0; maxIterations-- {
 		room := Room{
-			width:  rand.Intn(12) + 3,
-			height: rand.Intn(8) + 3,
-			x:      rand.Intn(s.width) + 1,
-			y:      rand.Intn(s.height) + 1,
+			width:  roundUpToEven(rand.Intn(12) + 3),
+			height: roundUpToEven(rand.Intn(8) + 3),
+			x:      roundUpToEven(rand.Intn(s.width) + 1),
+			y:      roundUpToEven(rand.Intn(s.height) + 1),
 		}
 
 		validRoom := true
