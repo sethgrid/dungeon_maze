@@ -206,70 +206,41 @@ func (s *Stage) FillMaze() {
 
 	tiles := make([]Tile, 0)
 	tiles = append(tiles, s.cell[x][y])
-
-OUTER:
+	i := 0
 	for len(tiles) > 0 {
 		if Animate {
 			s.PrintUnicode()
 			time.Sleep(time.Millisecond * 20)
 		}
 		// pick a random cell
-		i := rand.Intn(len(tiles))
-		// pick random order (1 up, 2 right, 3 down, 4 left)
-		directions := getRandomIntList(1, 5)
-		for _, direction := range directions {
-			curXAdj, curYAdj := 0, 0
+		i = rand.Intn(len(tiles))
 
-			switch direction {
-			case 1:
-				curYAdj += 2
-			case 2:
-				curXAdj += 2
-			case 3:
-				curYAdj -= 2
-			case 4:
-				curXAdj -= 2
-			default:
-				log.Printf("error - direction list gave unexpected result ", direction)
-			}
-			nextX := tiles[i].x + curXAdj
-			nextY := tiles[i].y + curYAdj
+		// find the next cell to carve out
+		nextX, nextY, middleX, middleY := s.innerLoop(tiles, i)
+		if nextX == 0 || nextY == 0 || middleX == 0 || middleY == 0 {
+			tiles = append(tiles[:i], tiles[i+1:]...)
 
-			if (nextX > s.width || nextX <= 0) || (nextY > s.height || nextY <= 0) {
-				continue
-			}
-
-			if s.cell[nextX][nextY].empty {
-				// todo - is this where logic goes to not collide with rooms?
-				continue
-			}
-
-			if _, ok := s.cell[nextX]; !ok {
-				log.Println("missing cell x ", nextX)
-				continue
-			}
-
-			if _, ok := s.cell[nextX][nextY]; !ok {
-				log.Println("missing cell x,y ", nextX, nextY)
-				continue
-			}
-
-			// carve out this cell and add it to the list, and start over
-			{
-				tmpTile := s.cell[nextX][nextY]
-				tmpTile.empty = true
-				s.cell[nextX][nextY] = tmpTile
-			}
-			// and clear the cell in the middle
-			{
-				tmpTile := s.cell[tiles[i].x+curXAdj/2][tiles[i].y+curYAdj/2]
-				tmpTile.empty = true
-				s.cell[tiles[i].x+curXAdj/2][tiles[i].y+curYAdj/2] = tmpTile
-			}
-
-			tiles = append(tiles, s.cell[nextX][nextY])
-			goto OUTER
+			continue
 		}
+		//fmt.Println(tiles)
+		// carve out this cell and add it to the list, and start over
+		if s.cellExists(nextX, nextY) {
+			tmpTile := s.cell[nextX][nextY]
+			tmpTile.empty = true
+			s.cell[nextX][nextY] = tmpTile
+		} else {
+			//fmt.Printf("Now you fucked up.")
+			// tiles = append(tiles[:i], tiles[i+1:]...)
+			continue
+		}
+		// and clear the cell in the middle
+		if s.cellExists(middleX, middleY) {
+			tmpTile := s.cell[middleX][middleY]
+			tmpTile.empty = true
+			s.cell[middleX][middleY] = tmpTile
+		}
+
+		tiles = append(tiles, s.cell[nextX][nextY])
 		// if we get here, there were no available filled cells to carve out
 		// cut out this element
 		if i+1 > len(tiles) {
@@ -277,8 +248,59 @@ OUTER:
 			continue
 		}
 
-		tiles = append(tiles[:i], tiles[i+1:]...)
 	}
+
+}
+
+// innerLoop finds the next cell's x and y. Because we have to clear out
+// two cells, it returns two sets of x,y (the destination cell, and the
+// cell in between)
+//
+//   Ex: we start at cell N, target cell M, and will need to clear O
+//       In this way, we eat through the maze. nom nom nom
+//   ####     ####    ####
+//   #N##  => #N#M => #NOM
+//   ####     ####    ####
+func (s *Stage) innerLoop(tiles []Tile, i int) (int, int, int, int) {
+	// pick random order (1 up, 2 right, 3 down, 4 left)
+	directions := getRandomIntList(1, 5)
+	nextX, nextY, middleX, middleY := 0, 0, 0, 0
+
+	for _, direction := range directions {
+		curXAdj, curYAdj := 0, 0
+
+		switch direction {
+		case 1:
+			curYAdj += 2
+		case 2:
+			curXAdj += 2
+		case 3:
+			curYAdj -= 2
+		case 4:
+			curXAdj -= 2
+		default:
+			log.Printf("error - direction list gave unexpected result ", direction)
+		}
+		nextX = tiles[i].x + curXAdj
+		nextY = tiles[i].y + curYAdj
+
+		if (nextX > s.width || nextX <= 0) || (nextY > s.height || nextY <= 0) {
+			continue
+		}
+
+		if s.cell[nextX][nextY].empty {
+			// todo - is this where logic goes to not collide with rooms?
+			continue
+		}
+
+		if !s.cellExists(nextX, nextY) {
+			continue
+		}
+
+		middleX, middleY = tiles[i].x+curXAdj/2, tiles[i].y+curYAdj/2
+		break
+	}
+	return nextX, nextY, middleX, middleY
 }
 
 // getRandomIntList returns [start, end) random sorted list of ints
