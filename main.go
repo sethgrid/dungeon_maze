@@ -20,6 +20,7 @@ var (
 type Stage struct {
 	width, height int
 	cell          map[int]map[int]Tile
+	rooms         []Room
 }
 
 type Tile struct {
@@ -246,6 +247,35 @@ func (s *Stage) FillMaze() {
 
 		tiles = append(tiles, s.cell[nextX][nextY])
 	}
+
+	// if there are rooms, open them up
+	for _, room := range s.rooms {
+		for i := 0; i < rand.Intn(2)+1; i++ {
+			side := rand.Intn(4)
+			xSide := rand.Intn(room.width) + room.x
+			ySide := rand.Intn(room.height) + room.y
+			x, y := 0, 0
+			switch side {
+			case 0:
+				x, y = xSide, room.y-1
+			case 1:
+				x, y = room.width+room.x+1, ySide
+			case 2:
+				x, y = xSide, room.height+room.y+1
+			case 3:
+				x, y = room.x-1, ySide
+			}
+
+			if s.cellExists(x, y) && x != 1 && x != s.width && y != 1 && y != s.height {
+				tmpTile := s.cell[x][y]
+				tmpTile.empty = true
+				s.cell[x][y] = tmpTile
+			} else {
+				i--
+			}
+
+		}
+	}
 }
 
 // getNextMove finds the next cell's x and y. Because we have to clear out
@@ -362,6 +392,8 @@ func (s *Stage) AddRooms() {
 		if !validRoom {
 			continue
 		}
+
+		s.rooms = append(s.rooms, room)
 
 		// place room
 		for x := room.x; x <= room.x+room.width; x++ {
